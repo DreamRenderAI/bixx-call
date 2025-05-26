@@ -10,6 +10,7 @@
     "@cerebras/cerebras_cloud_sdk": "^1.0.0",
     "dotenv": "^16.3.1",
     "express": "^4.19.2",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "cors": "^2.8.5"
   }
 }
