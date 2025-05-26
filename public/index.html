@@ -14,8 +14,6 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #eee;
     }
     .circle-container {
       width: 300px;
@@ -28,7 +26,6 @@
       justify-content: center;
       position: relative;
       overflow: hidden;
-      margin-bottom: 80px;
     }
     .animated-circle {
       width: 100%;
@@ -40,8 +37,6 @@
       animation: pulse 1.5s ease-in-out infinite, scaleTalk 2s ease-in-out infinite;
       opacity: 0;
       transform-origin: center;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
     }
     .animated-circle.active {
       opacity: 1;
@@ -70,13 +65,12 @@
     }
     .voice-selector {
       position: absolute;
-      bottom: 120px;
+      bottom: 100px;
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       justify-content: center;
-      max-width: 320px;
-      z-index: 10;
+      max-width: 300px;
     }
     .voice-button {
       background: #444;
@@ -87,24 +81,18 @@
       font-size: 12px;
       cursor: pointer;
       transition: background 0.3s ease;
-      user-select: none;
     }
-    .voice-button:hover:not(:disabled) {
+    .voice-button:hover {
       background: #666;
     }
     .voice-button.active {
       background: #00cc00;
-    }
-    .voice-button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
     }
     .controls {
       position: absolute;
       bottom: 20px;
       display: flex;
       gap: 20px;
-      z-index: 10;
     }
     .mic-button, .close-button {
       background: #333;
@@ -119,9 +107,8 @@
       align-items: center;
       justify-content: center;
       transition: background 0.3s ease;
-      user-select: none;
     }
-    .mic-button:hover:not(.muted), .close-button:hover {
+    .mic-button:hover, .close-button:hover {
       background: #555;
     }
     .mic-button.muted {
@@ -139,19 +126,17 @@
   </style>
 </head>
 <body>
-  <div class="circle-container" aria-label="Voice recognition animation">
+  <div class="circle-container">
     <div class="animated-circle" id="animatedCircle"></div>
   </div>
-
-  <div class="voice-selector" role="group" aria-label="Voice selection">
+  <div class="voice-selector">
     <button class="voice-button active" id="maleEnglish">Male English</button>
     <button class="voice-button" id="femaleEnglish">Female English</button>
     <button class="voice-button" id="maleHebrew">Male Hebrew</button>
     <button class="voice-button" id="femaleHebrew">Female Hebrew</button>
   </div>
-
   <div class="controls">
-    <button class="mic-button muted" id="micButton" title="Toggle microphone" aria-pressed="false" aria-label="Toggle microphone">
+    <button class="mic-button muted" id="micButton" title="Toggle microphone">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
         <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
@@ -159,7 +144,7 @@
         <line x1="8" y1="23" x2="16" y2="23"/>
       </svg>
     </button>
-    <button class="close-button" id="closeButton" title="Close window" aria-label="Close window">
+    <button class="close-button" id="closeButton" title="Close">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"/>
         <line x1="6" y1="6" x2="18" y2="18"/>
@@ -168,11 +153,11 @@
   </div>
 
   <script>
-    // Change wss:// to ws:// if running locally without HTTPS
-    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-
+    const ws = new WebSocket(`wss://${location.host}`);
     let isMicOn = false;
     let recognition = null;
+    let responseText = '';
+    let isSpeaking = false;
     let selectedVoice = null;
     let voices = [];
 
@@ -196,171 +181,193 @@
       }
     }
 
-    function findVoice(voices, langPrefix, genderHints = []) {
-      const filtered = voices.filter(v => v.lang.toLowerCase().startsWith(langPrefix.toLowerCase()));
-      if (filtered.length === 0) return null;
-      if (genderHints.length === 0) return filtered[0];
-      for (const hint of genderHints) {
-        const found = filtered.find(v => v.name.toLowerCase().includes(hint.toLowerCase()));
-        if (found) return found;
-      }
-      return filtered[0];
-    }
-
     function selectVoices() {
-      const maleEnglish = findVoice(voices, 'en', ['male', 'david', 'mark', 'alex']);
-      const femaleEnglish = findVoice(voices, 'en', ['female', 'zira', 'samantha', 'karen']);
-      const maleHebrew = findVoice(voices, 'he', ['male', 'david']);
-      const femaleHebrew = findVoice(voices, 'he', ['female', 'zira']);
+      // Find English voices
+      const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+      const maleEnglish = englishVoices.find(v => v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('mark'));
+      const femaleEnglish = englishVoices.find(v => v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('zira'));
 
-      selectedVoice = maleEnglish || femaleEnglish || maleHebrew || femaleHebrew || null;
+      // Find Hebrew voices
+      const hebrewVoices = voices.filter(v => v.lang.startsWith('he'));
+      const maleHebrew = hebrewVoices.find(v => v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('mark'));
+      const femaleHebrew = hebrewVoices.find(v => v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('zira'));
 
-      maleEnglishButton.disabled = !maleEnglish;
-      femaleEnglishButton.disabled = !femaleEnglish;
-      maleHebrewButton.disabled = !maleHebrew;
-      femaleHebrewButton.disabled = !femaleHebrew;
+      // Set default to Male English if available
+      if (maleEnglish) {
+        selectedVoice = maleEnglish;
+      } else if (femaleEnglish) {
+        selectedVoice = femaleEnglish;
+      } else if (maleHebrew) {
+        selectedVoice = maleHebrew;
+      } else if (femaleHebrew) {
+        selectedVoice = femaleHebrew;
+      }
 
-      maleEnglishButton.style.opacity = maleEnglish ? '1' : '0.5';
-      femaleEnglishButton.style.opacity = femaleEnglish ? '1' : '0.5';
-      maleHebrewButton.style.opacity = maleHebrew ? '1' : '0.5';
-      femaleHebrewButton.style.opacity = femaleHebrew ? '1' : '0.5';
-
-      maleEnglishButton.dataset.voiceName = maleEnglish ? maleEnglish.name : '';
-      femaleEnglishButton.dataset.voiceName = femaleEnglish ? femaleEnglish.name : '';
-      maleHebrewButton.dataset.voiceName = maleHebrew ? maleHebrew.name : '';
-      femaleHebrewButton.dataset.voiceName = femaleHebrew ? femaleHebrew.name : '';
-
-      updateVoiceButtons(selectedVoice ? selectedVoice.name : '');
-    }
-
-    function updateVoiceButtons(activeVoiceName) {
-      const buttons = [maleEnglishButton, femaleEnglishButton, maleHebrewButton, femaleHebrewButton];
-      buttons.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.voiceName === activeVoiceName);
+      // Add event listeners for buttons
+      maleEnglishButton.addEventListener('click', () => {
+        if (maleEnglish) {
+          selectedVoice = maleEnglish;
+          setActiveVoiceButton(maleEnglishButton);
+        }
       });
-    }
 
-    function setSelectedVoiceByName(name) {
-      selectedVoice = voices.find(v => v.name === name) || null;
-      updateVoiceButtons(name);
-    }
-
-    maleEnglishButton.addEventListener('click', () => {
-      if (!maleEnglishButton.disabled) setSelectedVoiceByName(maleEnglishButton.dataset.voiceName);
-    });
-    femaleEnglishButton.addEventListener('click', () => {
-      if (!femaleEnglishButton.disabled) setSelectedVoiceByName(femaleEnglishButton.dataset.voiceName);
-    });
-    maleHebrewButton.addEventListener('click', () => {
-      if (!maleHebrewButton.disabled) setSelectedVoiceByName(maleHebrewButton.dataset.voiceName);
-    });
-    femaleHebrewButton.addEventListener('click', () => {
-      if (!femaleHebrewButton.disabled) setSelectedVoiceByName(femaleHebrewButton.dataset.voiceName);
-    });
-
-    function speak(text) {
-      if (!text || !selectedVoice) return;
-      animatedCircle.classList.add('active');
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.voice = selectedVoice;
-      utterance.lang = selectedVoice.lang;
-      utterance.onend = () => {
-        animatedCircle.classList.remove('active');
-      };
-      speechSynthesis.speak(utterance);
-    }
-
-    function startRecognition() {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        alert('Speech Recognition API not supported in this browser.');
-        return;
-      }
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = selectedVoice?.lang || 'en-US';
-
-      recognition.onstart = () => {
-        micButton.classList.remove('muted');
-        micButton.setAttribute('aria-pressed', 'true');
-        animatedCircle.classList.add('active');
-      };
-      recognition.onend = () => {
-        micButton.classList.add('muted');
-        micButton.setAttribute('aria-pressed', 'false');
-        animatedCircle.classList.remove('active');
-        if (isMicOn) {
-          // Auto restart if mic still on
-          recognition.start();
+      femaleEnglishButton.addEventListener('click', () => {
+        if (femaleEnglish) {
+          selectedVoice = femaleEnglish;
+          setActiveVoiceButton(femaleEnglishButton);
         }
-      };
-      recognition.onerror = (e) => {
-        console.error('Speech recognition error:', e.error);
-        stopRecognition();
-      };
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript.trim();
-        console.log('Recognized:', transcript);
-        if (transcript) {
-          ws.send(JSON.stringify({ type: 'user_message', text: transcript }));
+      });
+
+      maleHebrewButton.addEventListener('click', () => {
+        if (maleHebrew) {
+          selectedVoice = maleHebrew;
+          setActiveVoiceButton(maleHebrewButton);
         }
-      };
+      });
 
-      recognition.start();
+      femaleHebrewButton.addEventListener('click', () => {
+        if (femaleHebrew) {
+          selectedVoice = femaleHebrew;
+          setActiveVoiceButton(femaleHebrewButton);
+        }
+      });
+
+      // Disable and dim buttons if no voice is found
+      if (!maleEnglish) {
+        maleEnglishButton.disabled = true;
+        maleEnglishButton.style.opacity = '0.5';
+      }
+      if (!femaleEnglish) {
+        femaleEnglishButton.disabled = true;
+        femaleEnglishButton.style.opacity = '0.5';
+      }
+      if (!maleHebrew) {
+        maleHebrewButton.disabled = true;
+        maleHebrewButton.style.opacity = '0.5';
+      }
+      if (!femaleHebrew) {
+        femaleHebrewButton.disabled = true;
+        femaleHebrewButton.style.opacity = '0.5';
+      }
+
+      // Set initial active button
+      if (selectedVoice) {
+        if (selectedVoice === maleEnglish) setActiveVoiceButton(maleEnglishButton);
+        else if (selectedVoice === femaleEnglish) setActiveVoiceButton(femaleEnglishButton);
+        else if (selectedVoice === maleHebrew) setActiveVoiceButton(maleHebrewButton);
+        else if (selectedVoice === femaleHebrew) setActiveVoiceButton(femaleHebrewButton);
+      }
     }
 
-    function stopRecognition() {
-      if (recognition) {
-        recognition.stop();
-        recognition = null;
-      }
-      micButton.classList.add('muted');
-      micButton.setAttribute('aria-pressed', 'false');
-      animatedCircle.classList.remove('active');
+    function setActiveVoiceButton(button) {
+      document.querySelectorAll('.voice-button').forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
     }
 
-    micButton.addEventListener('click', () => {
-      isMicOn = !isMicOn;
-      if (isMicOn) {
-        startRecognition();
-      } else {
-        stopRecognition();
-      }
-    });
-
-    closeButton.addEventListener('click', () => {
-      window.close(); // This will only work if the window was opened by script
-    });
-
-    ws.onopen = () => {
-      console.log('WebSocket connected.');
-    };
+    ws.onopen = () => console.log('WebSocket connected');
+    ws.onclose = () => console.log('WebSocket disconnected');
+    ws.onerror = (e) => console.error('WebSocket error', e);
 
     ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'bot_response' && data.text) {
-          speak(data.text);
-        }
-      } catch (e) {
-        console.error('Invalid message from server:', e);
+      const data = event.data;
+
+      if (data === '[DONE]') {
+        console.log('Stream ended');
+        animatedCircle.classList.remove('active');
+        speakResponse(responseText);
+        responseText = '';
+        return;
       }
+      if (data === '[ERROR]') {
+        animatedCircle.classList.remove('active');
+        return;
+      }
+
+      responseText += data;
+      animatedCircle.classList.add('active');
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket connection closed.');
-      stopRecognition();
-    };
+    function toggleMic() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    ws.onerror = (e) => {
-      console.error('WebSocket error:', e);
-      stopRecognition();
-    };
+      if (!SpeechRecognition) {
+        alert('Speech recognition not supported. Use Chrome or Edge.');
+        return;
+      }
 
-    window.onload = () => {
-      loadVoices();
-    };
+      if (!isMicOn) {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+          micButton.classList.remove('muted');
+          isMicOn = true;
+        };
+
+        recognition.onresult = (event) => {
+          const finalTranscript = event.results[0][0].transcript;
+          ws.send(finalTranscript);
+        };
+
+        recognition.onerror = (event) => {
+          micButton.classList.add('muted');
+          isMicOn = false;
+        };
+
+        recognition.onend = () => {
+          if (isMicOn) {
+            recognition.start();
+          }
+        };
+
+        recognition.start();
+      } else {
+        if (recognition) {
+          recognition.stop();
+          isMicOn = false;
+          micButton.classList.add('muted');
+        }
+      }
+    }
+
+    function speakResponse(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = selectedVoice ? selectedVoice.lang : 'en-US';
+      utterance.volume = 1;
+      utterance.rate = 1;
+      utterance.pitch = 1;
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      } else {
+        utterance.pitch = 0.8;
+        utterance.rate = 0.9;
+      }
+
+      utterance.onstart = () => {
+        isSpeaking = true;
+        if (isMicOn) {
+          recognition.stop();
+          isMicOn = false;
+          micButton.classList.add('muted');
+        }
+      };
+      utterance.onend = () => {
+        isSpeaking = false;
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    micButton.addEventListener('click', toggleMic);
+    closeButton.addEventListener('click', () => {
+      window.speechSynthesis.cancel();
+      window.close();
+    });
+
+    loadVoices();
   </script>
 </body>
 </html>
