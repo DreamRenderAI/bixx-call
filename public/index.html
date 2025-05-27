@@ -160,6 +160,7 @@
   let responseText = '';
   let isSpeaking = false;
   let selectedVoice = { name: 'UK English Male', lang: 'en-GB', type: 'responsivevoice' }; // Default voice
+  let hebrewVoices = [];
 
   const micButton = document.getElementById('micButton');
   const animatedCircle = document.getElementById('animatedCircle');
@@ -170,58 +171,102 @@
   const femaleHebrewButton = document.getElementById('femaleHebrew');
 
   function initializeVoices() {
-    // Define available voices
+    // Define English voices (ResponsiveVoice)
     const voices = {
       maleEnglish: { name: 'UK English Male', lang: 'en-GB', type: 'responsivevoice' },
-      femaleEnglish: { name: 'UK English Female', lang: 'en-GB', type: 'responsivevoice' },
-      maleHebrew: { name: 'he-IL-Standard-A', lang: 'he-IL', type: 'google' },
-      femaleHebrew: { name: 'he-IL-Standard-B', lang: 'he-IL', type: 'google' }
+      femaleEnglish: { name: 'UK English Female', lang: 'en-GB', type: 'responsivevoice' }
     };
 
     // Check ResponsiveVoice voices for English
     const responsiveVoiceList = responsiveVoice.getVoices();
     console.log('Available ResponsiveVoice voices:', responsiveVoiceList);
 
-    // Add event listeners for voice selection
-    maleEnglishButton.addEventListener('click', () => {
-      selectedVoice = voices.maleEnglish;
+    // Load Hebrew voices from Web Speech API
+    hebrewVoices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('he-'));
+    if (hebrewVoices.length === 0) {
+      speechSynthesis.onvoiceschanged = () => {
+        hebrewVoices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('he-'));
+        console.log('Hebrew voices loaded:', hebrewVoices);
+        setupHebrewVoices();
+      };
+      // Trigger voice loading (mobile workaround)
+      const utterance = new SpeechSynthesisUtterance('');
+      utterance.volume = 0;
+      speechSynthesis.speak(utterance);
+      speechSynthesis.cancel();
+    } else {
+      setupHebrewVoices();
+    }
+
+    function setupHebrewVoices() {
+      // Select Hebrew voices (male and female)
+      const maleHebrewVoice = hebrewVoices.find(v => 
+        v.name.toLowerCase().includes('male') || 
+        v.name.toLowerCase().includes('asaf') || 
+        !v.name.toLowerCase().includes('female')
+      ) || hebrewVoices[0];
+      const femaleHebrewVoice = hebrewVoices.find(v => 
+        v.name.toLowerCase().includes('female') || 
+        v.name.toLowerCase().includes('carmit')
+      ) || hebrewVoices[1] || hebrewVoices[0];
+
+      voices.maleHebrew = maleHebrewVoice ? { name: maleHebrewVoice.name, lang: 'he-IL', type: 'webspeech', voice: maleHebrewVoice } : null;
+      voices.femaleHebrew = femaleHebrewVoice ? { name: femaleHebrewVoice.name, lang: 'he-IL', type: 'webspeech', voice: femaleHebrewVoice } : null;
+
+      // Add event listeners for voice selection
+      maleEnglishButton.addEventListener('click', () => {
+        selectedVoice = voices.maleEnglish;
+        setActiveVoiceButton(maleEnglishButton);
+        console.log('Selected Male English:', selectedVoice);
+      });
+
+      femaleEnglishButton.addEventListener('click', () => {
+        selectedVoice = voices.femaleEnglish;
+        setActiveVoiceButton(femaleEnglishButton);
+        console.log('Selected Female English:', selectedVoice);
+      });
+
+      maleHebrewButton.addEventListener('click', () => {
+        if (voices.maleHebrew) {
+          selectedVoice = voices.maleHebrew;
+          setActiveVoiceButton(maleHebrewButton);
+          console.log('Selected Male Hebrew:', selectedVoice);
+        }
+      });
+
+      femaleHebrewButton.addEventListener('click', () => {
+        if (voices.femaleHebrew) {
+          selectedVoice = voices.femaleHebrew;
+          setActiveVoiceButton(femaleHebrewButton);
+          console.log('Selected Female Hebrew:', selectedVoice);
+        }
+      });
+
+      // Disable buttons for unavailable voices
+      if (!responsiveVoiceList.some(v => v.name === voices.maleEnglish.name)) {
+        maleEnglishButton.disabled = true;
+        maleEnglishButton.style.opacity = '0.5';
+        console.log('Male English voice unavailable');
+      }
+      if (!responsiveVoiceList.some(v => v.name === voices.femaleEnglish.name)) {
+        femaleEnglishButton.disabled = true;
+        femaleEnglishButton.style.opacity = '0.5';
+        console.log('Female English voice unavailable');
+      }
+      if (!voices.maleHebrew) {
+        maleHebrewButton.disabled = true;
+        maleHebrewButton.style.opacity = '0.5';
+        console.log('Male Hebrew voice unavailable');
+      }
+      if (!voices.femaleHebrew) {
+        femaleHebrewButton.disabled = true;
+        femaleHebrewButton.style.opacity = '0.5';
+        console.log('Female Hebrew voice unavailable');
+      }
+
+      // Set default active button
       setActiveVoiceButton(maleEnglishButton);
-      console.log('Selected Male English:', selectedVoice);
-    });
-
-    femaleEnglishButton.addEventListener('click', () => {
-      selectedVoice = voices.femaleEnglish;
-      setActiveVoiceButton(femaleEnglishButton);
-      console.log('Selected Female English:', selectedVoice);
-    });
-
-    maleHebrewButton.addEventListener('click', () => {
-      selectedVoice = voices.maleHebrew;
-      setActiveVoiceButton(maleHebrewButton);
-      console.log('Selected Male Hebrew:', selectedVoice);
-    });
-
-    femaleHebrewButton.addEventListener('click', () => {
-      selectedVoice = voices.femaleHebrew;
-      setActiveVoiceButton(femaleHebrewButton);
-      console.log('Selected Female Hebrew:', selectedVoice);
-    });
-
-    // Disable buttons for unavailable ResponsiveVoice voices
-    if (!responsiveVoiceList.some(v => v.name === voices.maleEnglish.name)) {
-      maleEnglishButton.disabled = true;
-      maleEnglishButton.style.opacity = '0.5';
-      console.log('Male English voice unavailable');
     }
-    if (!responsiveVoiceList.some(v => v.name === voices.femaleEnglish.name)) {
-      femaleEnglishButton.disabled = true;
-      femaleEnglishButton.style.opacity = '0.5';
-      console.log('Female English voice unavailable');
-    }
-    // Note: Google Cloud TTS availability depends on API key and network, so we assume availability
-
-    // Set default active button
-    setActiveVoiceButton(maleEnglishButton);
   }
 
   function setActiveVoiceButton(button) {
@@ -301,7 +346,7 @@
     }
   }
 
-  async function speakResponse(text) {
+  function speakResponse(text) {
     if (!text.trim()) return; // Skip empty responses
 
     if (selectedVoice.type === 'responsivevoice') {
@@ -329,74 +374,49 @@
       };
       console.log('Speaking with ResponsiveVoice:', selectedVoice.name);
       responsiveVoice.speak(text, selectedVoice.name, params);
-    } else if (selectedVoice.type === 'google') {
-      // Use Google Cloud TTS for Hebrew
-      try {
-        const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key=YOUR_GOOGLE_CLOUD_API_KEY', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            input: { text: text },
-            voice: {
-              languageCode: selectedVoice.lang,
-              name: selectedVoice.name
-            },
-            audioConfig: {
-              audioEncoding: 'MP3',
-              speakingRate: 1.0,
-              pitch: 0,
-              volumeGainDb: 0
-            }
-          })
-        });
+    } else if (selectedVoice.type === 'webspeech') {
+      // Use Web Speech API for Hebrew
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = selectedVoice.lang;
+      utterance.volume = 1;
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.voice = selectedVoice.voice;
 
-        if (!response.ok) {
-          throw new Error(`Google TTS API error: ${response.status}`);
+      utterance.onstart = () => {
+        isSpeaking = true;
+        animatedCircle.classList.add('active');
+        if (isMicOn) {
+          recognition.stop();
+          isMicOn = false;
+          micButton.classList.add('muted');
         }
+      };
+      utterance.onend = () => {
+        isSpeaking = false;
+        animatedCircle.classList.remove('active');
+        if (isMicOn) {
+          recognition.start();
+        }
+      };
+      utterance.onerror = (e) => {
+        console.error('Speech synthesis error:', e);
+        isSpeaking = false;
+        animatedCircle.classList.remove('active');
+        if (isMicOn) {
+          recognition.start();
+        }
+      };
 
-        const data = await response.json();
-        const audioContent = data.audioContent;
-        const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
-
-        audio.onplay = () => {
-          isSpeaking = true;
-          animatedCircle.classList.add('active');
-          if (isMicOn) {
-            recognition.stop();
-            isMicOn = false;
-            micButton.classList.add('muted');
-          }
-        };
-        audio.onended = () => {
-          isSpeaking = false;
-          animatedCircle.classList.remove('active');
-          if (isMicOn) {
-            recognition.start();
-          }
-        };
-        audio.onerror = (e) => {
-          console.error('Audio playback error:', e);
-          isSpeaking = false;
-          animatedCircle.classList.remove('active');
-          if (isMicOn) {
-            recognition.start();
-          }
-        };
-
-        console.log('Speaking with Google Cloud TTS:', selectedVoice.name);
-        audio.play();
-      } catch (error) {
-        console.error('Google TTS error:', error);
-        alert('Failed to synthesize Hebrew speech. Please check your API key or network.');
-      }
+      console.log('Speaking with Web Speech API:', selectedVoice.name);
+      window.speechSynthesis.speak(utterance);
     }
   }
 
   micButton.addEventListener('click', toggleMic);
   closeButton.addEventListener('click', () => {
     responsiveVoice.cancel();
+    window.speechSynthesis.cancel();
     window.close();
   });
 
@@ -406,7 +426,6 @@
       initializeVoices();
     } else {
       console.error('ResponsiveVoice not loaded');
-      // Disable English voice buttons if ResponsiveVoice fails
       maleEnglishButton.disabled = true;
       femaleEnglishButton.disabled = true;
       maleEnglishButton.style.opacity = '0.5';
