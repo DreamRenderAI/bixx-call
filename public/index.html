@@ -156,7 +156,7 @@
     </button>
   </div>
 
-  <!-- Load ResponsiveVoice script once -->
+  <!-- Load ResponsiveVoice script for English voices -->
   <script src="https://code.responsivevoice.org/responsivevoice.js?key=unaTPkHE"></script>
 
   <script>
@@ -170,7 +170,7 @@
     let recognition = null;
     let responseText = '';
     let isSpeaking = false;
-    let selectedVoice = 'US English Male'; // Default voice
+    let selectedVoice = { name: 'US English Male', lang: 'en-US', isHebrew: false }; // Default voice
 
     const micButton = document.getElementById('micButton');
     const animatedCircle = document.getElementById('animatedCircle');
@@ -181,52 +181,52 @@
     const femaleHebrewButton = document.getElementById('femaleHebrew');
 
     function loadVoices() {
-      // Check if ResponsiveVoice is loaded
+      // Check if ResponsiveVoice is loaded (for English voices)
       if (typeof responsiveVoice === 'undefined') {
         console.error('ResponsiveVoice not loaded');
-        // Disable voice buttons if ResponsiveVoice fails
-        [maleEnglishButton, femaleEnglishButton, maleHebrewButton, femaleHebrewButton].forEach(btn => {
+        // Disable English voice buttons
+        [maleEnglishButton, femaleEnglishButton].forEach(btn => {
           btn.disabled = true;
           btn.style.opacity = '0.5';
         });
-        return;
+      } else {
+        console.log('ResponsiveVoice loaded successfully');
       }
-      console.log('ResponsiveVoice loaded successfully');
       selectVoices();
     }
 
     function selectVoices() {
-      // Map buttons to ResponsiveVoice voice names and languages
+      // Map buttons to voice names, languages, and whether they use Speakatoo (Hebrew)
       const voiceMap = {
-        maleEnglish: { name: 'US English Male', lang: 'en-US' },
-        femaleEnglish: { name: 'US English Female', lang: 'en-US' },
-        maleHebrew: { name: 'Hebrew Male', lang: 'he-IL' },
-        femaleHebrew: { name: 'Hebrew Female', lang: 'he-IL' }
+        maleEnglish: { name: 'US English Male', lang: 'en-US', isHebrew: false },
+        femaleEnglish: { name: 'US English Female', lang: 'en-US', isHebrew: false },
+        maleHebrew: { name: 'he_male_1', lang: 'he-IL', isHebrew: true }, // Speakatoo voice ID
+        femaleHebrew: { name: 'he_female_1', lang: 'he-IL', isHebrew: true } // Speakatoo voice ID
       };
 
       // Add event listeners for voice selection buttons
       maleEnglishButton.addEventListener('click', () => {
-        selectedVoice = voiceMap.maleEnglish.name;
+        selectedVoice = voiceMap.maleEnglish;
         setActiveVoiceButton(maleEnglishButton);
-        if (recognition) recognition.lang = voiceMap.maleEnglish.lang;
+        if (recognition) recognition.lang = selectedVoice.lang;
       });
 
       femaleEnglishButton.addEventListener('click', () => {
-        selectedVoice = voiceMap.femaleEnglish.name;
+        selectedVoice = voiceMap.femaleEnglish;
         setActiveVoiceButton(femaleEnglishButton);
-        if (recognition) recognition.lang = voiceMap.femaleEnglish.lang;
+        if (recognition) recognition.lang = selectedVoice.lang;
       });
 
       maleHebrewButton.addEventListener('click', () => {
-        selectedVoice = voiceMap.maleHebrew.name;
+        selectedVoice = voiceMap.maleHebrew;
         setActiveVoiceButton(maleHebrewButton);
-        if (recognition) recognition.lang = voiceMap.maleHebrew.lang;
+        if (recognition) recognition.lang = selectedVoice.lang;
       });
 
       femaleHebrewButton.addEventListener('click', () => {
-        selectedVoice = voiceMap.femaleHebrew.name;
+        selectedVoice = voiceMap.femaleHebrew;
         setActiveVoiceButton(femaleHebrewButton);
-        if (recognition) recognition.lang = voiceMap.femaleHebrew.lang;
+        if (recognition) recognition.lang = selectedVoice.lang;
       });
 
       // Set initial active button (default to Male English)
@@ -244,22 +244,25 @@
     ws.onerror = (e) => console.error('WebSocket error', e);
 
     ws.onmessage = (event) => {
-      const data = event.data;
+      const data = JSON.parse(event.data);
 
-      if (data === '[DONE]') {
-        console.log('Stream ended');
+      if (data.type === 'text') {
+        responseText += data.content;
+        animatedCircle.classList.add('active');
+      } else if (data.type === 'audio') {
         animatedCircle.classList.remove('active');
-        speakResponse(responseText);
+        playAudio(data.url);
         responseText = '';
-        return;
-      }
-      if (data === '[ERROR]') {
+      } else if (data.type === 'done') {
         animatedCircle.classList.remove('active');
-        return;
+        if (!selectedVoice.isHebrew) {
+          speakResponse(responseText);
+          responseText = '';
+        }
+      } else if (data.type === 'error') {
+        animatedCircle.classList.remove('active');
+        responseText = '';
       }
-
-      responseText += data;
-      animatedCircle.classList.add('active');
     };
 
     function toggleMic() {
@@ -272,7 +275,7 @@
 
       if (!isMicOn) {
         recognition = new SpeechRecognition();
-        recognition.lang = selectedVoice.includes('Hebrew') ? 'he-IL' : 'en-US';
+        recognition.lang = selectedVoice.lang;
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
 
@@ -283,7 +286,7 @@
 
         recognition.onresult = (event) => {
           const finalTranscript = event.results[0][0].transcript;
-          ws.send(finalTranscript);
+          ws.send(JSON.stringify({ text: finalTranscript, voice: selectedVoice }));
         };
 
         recognition.onerror = (event) => {
@@ -293,7 +296,7 @@
 
         recognition.onend = () => {
           if (isMicOn) {
-            recognition.lang = selectedVoice.includes('Hebrew') ? 'he-IL' : 'en-US';
+            recognition.lang = selectedVoice.lang;
             recognition.start();
           }
         };
@@ -313,12 +316,16 @@
         console.error('No text to speak');
         return;
       }
+      if (selectedVoice.isHebrew) {
+        console.log('Hebrew voice handled server-side');
+        return;
+      }
       if (typeof responsiveVoice === 'undefined') {
         console.error('ResponsiveVoice not loaded');
         return;
       }
 
-      responsiveVoice.speak(text, selectedVoice, {
+      responsiveVoice.speak(text, selectedVoice.name, {
         volume: 1,
         rate: 1,
         pitch: 1,
@@ -333,11 +340,34 @@
         onend: () => {
           isSpeaking = false;
           if (isMicOn) {
-            recognition.lang = selectedVoice.includes('Hebrew') ? 'he-IL' : 'en-US';
+            recognition.lang = selectedVoice.lang;
             recognition.start();
           }
         }
       });
+    }
+
+    function playAudio(url) {
+      const audio = new Audio(url);
+      audio.onplay = () => {
+        isSpeaking = true;
+        if (isMicOn) {
+          recognition.stop();
+          isMicOn = false;
+          micButton.classList.add('muted');
+        }
+      };
+      audio.onended = () => {
+        isSpeaking = false;
+        if (isMicOn) {
+          recognition.lang = selectedVoice.lang;
+          recognition.start();
+        }
+      };
+      audio.onerror = () => {
+        console.error('Error playing audio:', url);
+      };
+      audio.play();
     }
 
     micButton.addEventListener('click', toggleMic);
@@ -348,9 +378,9 @@
       window.close();
     });
 
-    // Load voices after window load to ensure script is ready
+    // Load voices after window load
     window.addEventListener('load', () => {
-      setTimeout(loadVoices, 1000); // Delay to allow ResponsiveVoice initialization
+      setTimeout(loadVoices, 1000); // Delay for ResponsiveVoice initialization
     });
   </script>
 </body>
