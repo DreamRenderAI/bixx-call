@@ -228,7 +228,17 @@
       };
 
       const loadHebrewVoices = () => {
-        hebrewVoices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('he-'));
+        if (!window.speechSynthesis) {
+          console.warn('speechSynthesis not supported in this browser');
+          voiceButtons.maleHebrew.disabled = true;
+          voiceButtons.femaleHebrew.disabled = true;
+          voiceButtons.maleHebrew.style.opacity = '0.5';
+          voiceButtons.femaleHebrew.style.opacity = '0.5';
+          setupVoiceButtons(voices);
+          return;
+        }
+
+        hebrewVoices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('he-'));
         console.log('Hebrew voices:', hebrewVoices);
         
         const maleHebrewVoice = hebrewVoices.find(v => 
@@ -244,6 +254,10 @@
         voices.maleHebrew = maleHebrewVoice ? { name: maleHebrewVoice.name, lang: 'he-IL', type: 'webspeech', voice: maleHebrewVoice } : null;
         voices.femaleHebrew = femaleHebrewVoice ? { name: femaleHebrewVoice.name, lang: 'he-IL', type: 'webspeech', voice: femaleHebrewVoice } : null;
 
+        setupVoiceButtons(voices);
+      };
+
+      function setupVoiceButtons(voices) {
         Object.entries(voiceButtons).forEach(([key, button]) => {
           button.addEventListener('click', () => {
             if (voices[key] && !button.disabled) {
@@ -262,16 +276,22 @@
         });
 
         setActiveVoiceButton(voiceButtons.maleEnglish);
-      };
+      }
 
-      if (speechSynthesis.getVoices().length > 0) {
+      if (window.speechSynthesis && window.speechSynthesis.getVoices().length > 0) {
         loadHebrewVoices();
-      } else {
-        speechSynthesis.onvoiceschanged = loadHebrewVoices;
+      } else if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          loadHebrewVoices();
+          window.speechSynthesis.onvoiceschanged = null; // Prevent multiple triggers
+        };
+        // Trigger voice loading
         const utterance = new SpeechSynthesisUtterance('');
         utterance.volume = 0;
-        speechSynthesis.speak(utterance);
-        speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+        window.speechSynthesis.cancel();
+      } else {
+        loadHebrewVoices(); // Fallback for browsers without speechSynthesis
       }
     }
 
@@ -378,7 +398,7 @@
             }
           }
         });
-      } else {
+      } else if (selectedVoice.type === 'webspeech' && window.speechSynthesis) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = selectedVoice.lang;
         utterance.volume = 1;
@@ -417,13 +437,18 @@
         };
 
         window.speechSynthesis.speak(utterance);
+      } else {
+        console.warn('Speech synthesis not available for selected voice');
+        isSpeaking = false;
+        animatedCircle.classList.remove('active');
+        isProcessing = false;
       }
     }
 
     micButton.addEventListener('click', toggleMic);
     closeButton.addEventListener('click', () => {
       responsiveVoice.cancel();
-      window.speechSynthesis.cancel();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
       if (recognition) recognition.stop();
       if (ws) ws.close();
       window.close();
@@ -446,7 +471,7 @@
       if (ws) ws.close();
       if (recognition) recognition.stop();
       responsiveVoice.cancel();
-      window.speechSynthesis.cancel();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
     });
   </script>
 </body>
