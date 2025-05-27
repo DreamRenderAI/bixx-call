@@ -136,6 +136,8 @@
   <div class="voice-selector">
     <button class="voice-button active" id="maleEnglish">Male English</button>
     <button class="voice-button" id="femaleEnglish">Female English</button>
+    <button class="voice-button" id="maleHebrew">Male Hebrew</button>
+    <button class="voice-button" id="femaleHebrew">Female Hebrew</button>
   </div>
   <div class="controls">
     <button class="mic-button muted" id="micButton" title="Toggle microphone">
@@ -175,13 +177,15 @@
     const closeButton = document.getElementById('closeButton');
     const maleEnglishButton = document.getElementById('maleEnglish');
     const femaleEnglishButton = document.getElementById('femaleEnglish');
+    const maleHebrewButton = document.getElementById('maleHebrew');
+    const femaleHebrewButton = document.getElementById('femaleHebrew');
 
     function loadVoices() {
       // Check if ResponsiveVoice is loaded
       if (typeof responsiveVoice === 'undefined') {
         console.error('ResponsiveVoice not loaded');
         // Disable voice buttons if ResponsiveVoice fails
-        [maleEnglishButton, femaleEnglishButton].forEach(btn => {
+        [maleEnglishButton, femaleEnglishButton, maleHebrewButton, femaleHebrewButton].forEach(btn => {
           btn.disabled = true;
           btn.style.opacity = '0.5';
         });
@@ -192,25 +196,42 @@
     }
 
     function selectVoices() {
-      // Map buttons to ResponsiveVoice voice names
+      // Map buttons to ResponsiveVoice voice names and languages
       const voiceMap = {
-        maleEnglish: 'US English Male',
-        femaleEnglish: 'US English Female'
+        maleEnglish: { name: 'US English Male', lang: 'en-US' },
+        femaleEnglish: { name: 'US English Female', lang: 'en-US' },
+        maleHebrew: { name: 'Hebrew Male', lang: 'he-IL' },
+        femaleHebrew: { name: 'Hebrew Female', lang: 'he-IL' }
       };
 
       // Add event listeners for voice selection buttons
       maleEnglishButton.addEventListener('click', () => {
-        selectedVoice = voiceMap.maleEnglish;
+        selectedVoice = voiceMap.maleEnglish.name;
         setActiveVoiceButton(maleEnglishButton);
+        if (recognition) recognition.lang = voiceMap.maleEnglish.lang;
       });
 
       femaleEnglishButton.addEventListener('click', () => {
-        selectedVoice = voiceMap.femaleEnglish;
+        selectedVoice = voiceMap.femaleEnglish.name;
         setActiveVoiceButton(femaleEnglishButton);
+        if (recognition) recognition.lang = voiceMap.femaleEnglish.lang;
+      });
+
+      maleHebrewButton.addEventListener('click', () => {
+        selectedVoice = voiceMap.maleHebrew.name;
+        setActiveVoiceButton(maleHebrewButton);
+        if (recognition) recognition.lang = voiceMap.maleHebrew.lang;
+      });
+
+      femaleHebrewButton.addEventListener('click', () => {
+        selectedVoice = voiceMap.femaleHebrew.name;
+        setActiveVoiceButton(femaleHebrewButton);
+        if (recognition) recognition.lang = voiceMap.femaleHebrew.lang;
       });
 
       // Set initial active button (default to Male English)
       setActiveVoiceButton(maleEnglishButton);
+      if (recognition) recognition.lang = voiceMap.maleEnglish.lang;
     }
 
     function setActiveVoiceButton(button) {
@@ -251,7 +272,7 @@
 
       if (!isMicOn) {
         recognition = new SpeechRecognition();
-        recognition.lang = 'en-US'; // Fixed to English
+        recognition.lang = selectedVoice.includes('Hebrew') ? 'he-IL' : 'en-US';
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
 
@@ -272,6 +293,7 @@
 
         recognition.onend = () => {
           if (isMicOn) {
+            recognition.lang = selectedVoice.includes('Hebrew') ? 'he-IL' : 'en-US';
             recognition.start();
           }
         };
@@ -311,7 +333,8 @@
         onend: () => {
           isSpeaking = false;
           if (isMicOn) {
-            recognition.start(); // Restart recognition if mic is still on
+            recognition.lang = selectedVoice.includes('Hebrew') ? 'he-IL' : 'en-US';
+            recognition.start();
           }
         }
       });
