@@ -202,7 +202,7 @@
       ws = new WebSocket(`wss://${location.host}`);
       
       ws.onopen = () => {
-        responseTextElement.textContent = 'Connected to server';
+        responseTextElement.textContent = 'Connected to Bixx server';
         responseTextElement.classList.add('visible');
         setTimeout(() => responseTextElement.classList.remove('visible'), 2000);
       };
