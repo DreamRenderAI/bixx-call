@@ -283,15 +283,14 @@
       } else if (window.speechSynthesis) {
         window.speechSynthesis.onvoiceschanged = () => {
           loadHebrewVoices();
-          window.speechSynthesis.onvoiceschanged = null; // Prevent multiple triggers
+          window.speechSynthesis.onvoiceschanged = null;
         };
-        // Trigger voice loading
         const utterance = new SpeechSynthesisUtterance('');
         utterance.volume = 0;
         window.speechSynthesis.speak(utterance);
         window.speechSynthesis.cancel();
       } else {
-        loadHebrewVoices(); // Fallback for browsers without speechSynthesis
+        loadHebrewVoices();
       }
     }
 
@@ -318,15 +317,26 @@
           micButton.classList.remove('muted');
           isMicOn = true;
           console.log('Microphone started');
+          animatedCircle.classList.add('active');
         };
 
         recognition.onresult = (event) => {
           if (isProcessing) return;
           isProcessing = true;
+          
+          // Stop microphone when speech is detected
+          recognition.stop();
+          isMicOn = false;
+          micButton.classList.add('muted');
+          
           const transcript = event.results[0][0].transcript;
           console.log('Transcript:', transcript);
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(transcript);
+          } else {
+            console.error('WebSocket not open');
+            isProcessing = false;
+            animatedCircle.classList.remove('active');
           }
         };
 
@@ -335,9 +345,11 @@
           micButton.classList.add('muted');
           isMicOn = false;
           isProcessing = false;
+          animatedCircle.classList.remove('active');
         };
 
         recognition.onend = () => {
+          // Only restart if explicitly turned on and not speaking
           if (isMicOn && !isSpeaking) {
             try {
               recognition.start();
@@ -345,7 +357,10 @@
               console.error('Failed to restart recognition:', e);
               isMicOn = false;
               micButton.classList.add('muted');
+              animatedCircle.classList.remove('active');
             }
+          } else {
+            animatedCircle.classList.remove('active');
           }
         };
 
@@ -354,6 +369,7 @@
         } catch (e) {
           console.error('Failed to start recognition:', e);
           micButton.classList.add('muted');
+          animatedCircle.classList.remove('active');
         }
       } else {
         if (recognition) {
@@ -361,6 +377,7 @@
           isMicOn = false;
           micButton.classList.add('muted');
           console.log('Microphone stopped');
+          animatedCircle.classList.remove('active');
         }
       }
     }
@@ -387,15 +404,6 @@
             isSpeaking = false;
             animatedCircle.classList.remove('active');
             isProcessing = false;
-            if (isMicOn) {
-              try {
-                recognition.start();
-              } catch (e) {
-                console.error('Failed to restart recognition:', e);
-                isMicOn = false;
-                micButton.classList.add('muted');
-              }
-            }
           }
         });
       } else if (selectedVoice.type === 'webspeech' && window.speechSynthesis) {
@@ -418,15 +426,6 @@
           isSpeaking = false;
           animatedCircle.classList.remove('active');
           isProcessing = false;
-          if (isMicOn) {
-            try {
-              recognition.start();
-            } catch (e) {
-              console.error('Failed to restart recognition:', e);
-              isMicOn = false;
-              micButton.classList.add('muted');
-            }
-          }
         };
 
         utterance.onerror = (e) => {
