@@ -186,7 +186,6 @@
     let selectedVoice = { name: 'UK English Male', lang: 'en-GB', type: 'responsivevoice' };
     let hebrewVoices = [];
     let isProcessing = false;
-    let hasTestedAudio = false;
 
     const micButton = document.getElementById('micButton');
     const animatedCircle = document.getElementById('animatedCircle');
@@ -203,22 +202,19 @@
       ws = new WebSocket(`wss://${location.host}`);
       
       ws.onopen = () => {
-        console.log('WebSocket connected');
-        responseTextElement.textContent = 'WebSocket connected';
+        responseTextElement.textContent = 'Connected to server';
         responseTextElement.classList.add('visible');
         setTimeout(() => responseTextElement.classList.remove('visible'), 2000);
       };
       
       ws.onclose = () => {
-        console.log('WebSocket disconnected. Attempting to reconnect...');
-        responseTextElement.textContent = 'WebSocket disconnected. Reconnecting...';
+        responseTextElement.textContent = 'Server disconnected. Reconnecting...';
         responseTextElement.classList.add('visible');
         setTimeout(connectWebSocket, 2000);
       };
       
-      ws.onerror = (e) => {
-        console.error('WebSocket error:', e);
-        responseTextElement.textContent = 'WebSocket error. Check server connection.';
+      ws.onerror = () => {
+        responseTextElement.textContent = 'Server connection error.';
         responseTextElement.classList.add('visible');
       };
       
@@ -226,18 +222,15 @@
         if (isProcessing) return;
         
         const data = event.data;
-        console.log('WebSocket received:', data);
         
         if (data === '[DONE]') {
-          console.log('Stream ended, response:', responseText);
           animatedCircle.classList.remove('active');
           if (responseText.trim()) {
             responseTextElement.textContent = responseText;
             responseTextElement.classList.add('visible');
             speakResponse(responseText);
           } else {
-            console.warn('No response text to speak');
-            responseTextElement.textContent = 'No response received from server.';
+            responseTextElement.textContent = 'No response from server.';
             responseTextElement.classList.add('visible');
           }
           responseText = '';
@@ -245,7 +238,6 @@
           return;
         }
         if (data === '[ERROR]') {
-          console.error('Server error');
           animatedCircle.classList.remove('active');
           responseTextElement.textContent = 'Server error occurred.';
           responseTextElement.classList.add('visible');
@@ -269,20 +261,15 @@
 
       const loadHebrewVoices = () => {
         if (!window.speechSynthesis) {
-          console.warn('speechSynthesis not supported in this browser');
           voiceButtons.maleHebrew.disabled = true;
           voiceButtons.femaleHebrew.disabled = true;
           voiceButtons.maleHebrew.style.opacity = '0.5';
           voiceButtons.femaleHebrew.style.opacity = '0.5';
-          responseTextElement.textContent = 'Hebrew voices not supported.';
-          responseTextElement.classList.add('visible');
-          setTimeout(() => responseTextElement.classList.remove('visible'), 3000);
           setupVoiceButtons(voices);
           return;
         }
 
         hebrewVoices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('he-'));
-        console.log('Hebrew voices:', hebrewVoices);
         
         const maleHebrewVoice = hebrewVoices.find(v => 
           v.name.toLowerCase().includes('male') || 
@@ -306,8 +293,6 @@
             if (voices[key] && !button.disabled) {
               selectedVoice = voices[key];
               setActiveVoiceButton(button);
-              console.log(`Selected ${key}:`, selectedVoice);
-              if (isMicOn) testAudio(); // Test audio on voice change if mic is active
             }
           });
 
@@ -315,7 +300,6 @@
               !responsiveVoice.getVoices().some(v => v.name === voices[key].name))) {
             button.disabled = true;
             button.style.opacity = '0.5';
-            console.log(`${key} voice unavailable`);
           }
         });
 
@@ -343,87 +327,11 @@
       button.classList.add('active');
     }
 
-    function testAudio() {
-      if (hasTestedAudio) return;
-      hasTestedAudio = true;
-      console.log('Testing audio with:', selectedVoice);
-      responseTextElement.textContent = 'Testing audio...';
-      responseTextElement.classList.add('visible');
-
-      if (selectedVoice.type === 'responsivevoice') {
-        responsiveVoice.speak('Test audio', selectedVoice.name, {
-          volume: 1,
-          rate: 1,
-          pitch: 1,
-          onstart: () => {
-            console.log('Test audio started');
-            responseTextElement.textContent = 'Test audio playing...';
-          },
-          onend: () => {
-            console.log('Test audio ended');
-            responseTextElement.textContent = 'Test audio completed.';
-            setTimeout(() => responseTextElement.classList.remove('visible'), 2000);
-          },
-          onerror: (e) => {
-            console.error('Test audio error:', e);
-            responseTextElement.textContent = 'Test audio failed. Check audio settings.';
-            responseTextElement.classList.add('visible');
-          }
-        });
-      } else if (selectedVoice.type === 'webspeech' && window.speechSynthesis) {
-        const utterance = new SpeechSynthesisUtterance('Test audio');
-        utterance.lang = selectedVoice.lang;
-        utterance.volume = 1;
-        utterance.rate = 1;
-        utterance.pitch = 1;
-        utterance.voice = selectedVoice.voice;
-        utterance.onstart = () => {
-          console.log('Test audio started');
-          responseTextElement.textContent = 'Test audio playing...';
-        };
-        utterance.onend = () => {
-          console.log('Test audio ended');
-          responseTextElement.textContent = 'Test audio completed.';
-          setTimeout(() => responseTextElement.classList.remove('visible'), 2000);
-        };
-        utterance.onerror = (e) => {
-          console.error('Test audio error:', e);
-          responseTextElement.textContent = 'Test audio failed. Trying fallback...';
-          responseTextElement.classList.add('visible');
-          // Fallback to ResponsiveVoice
-          selectedVoice = { name: 'UK English Male', lang: 'en-GB', type: 'responsivevoice' };
-          setActiveVoiceButton(voiceButtons.maleEnglish);
-          responsiveVoice.speak('Test audio', selectedVoice.name, {
-            volume: 1,
-            rate: 1,
-            pitch: 1,
-            onstart: () => console.log('Fallback audio started'),
-            onend: () => {
-              console.log('Fallback audio ended');
-              responseTextElement.textContent = 'Fallback audio completed.';
-              setTimeout(() => responseTextElement.classList.remove('visible'), 2000);
-            },
-            onerror: (e) => {
-              console.error('Fallback audio error:', e);
-              responseTextElement.textContent = 'Audio playback failed. Check browser audio settings.';
-              responseTextElement.classList.add('visible');
-            }
-          });
-        };
-        window.speechSynthesis.speak(utterance);
-      } else {
-        console.warn('No audio available for test');
-        responseTextElement.textContent = 'Audio test failed. Check voice support.';
-        responseTextElement.classList.add('visible');
-      }
-    }
-
     function toggleMic() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       
       if (!SpeechRecognition) {
-        alert('Speech recognition not supported. Use Chrome or Edge.');
-        responseTextElement.textContent = 'Speech recognition not supported.';
+        responseTextElement.textContent = 'Speech recognition not supported. Use Chrome or Edge.';
         responseTextElement.classList.add('visible');
         return;
       }
@@ -437,11 +345,9 @@
         recognition.onstart = () => {
           micButton.classList.remove('muted');
           isMicOn = true;
-          console.log('Microphone started');
           animatedCircle.classList.add('active');
           responseTextElement.textContent = 'Listening...';
           responseTextElement.classList.add('visible');
-          if (!hasTestedAudio) testAudio(); // Test audio on first mic activation
         };
 
         recognition.onresult = (event) => {
@@ -453,16 +359,13 @@
           micButton.classList.add('muted');
           
           const transcript = event.results[0][0].transcript;
-          console.log('Transcript:', transcript);
           responseTextElement.textContent = `You said: ${transcript}`;
           responseTextElement.classList.add('visible');
           
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(transcript);
-            console.log('Sent to WebSocket:', transcript);
           } else {
-            console.error('WebSocket not open');
-            responseTextElement.textContent = 'WebSocket not connected. Please try again.';
+            responseTextElement.textContent = 'Server not connected. Please try again.';
             responseTextElement.classList.add('visible');
             isProcessing = false;
             animatedCircle.classList.remove('active');
@@ -470,7 +373,6 @@
         };
 
         recognition.onerror = (event) => {
-          console.error('Speech recognition error:', event.error);
           micButton.classList.add('muted');
           isMicOn = false;
           isProcessing = false;
@@ -484,7 +386,6 @@
             try {
               recognition.start();
             } catch (e) {
-              console.error('Failed to restart recognition:', e);
               isMicOn = false;
               micButton.classList.add('muted');
               animatedCircle.classList.remove('active');
@@ -499,7 +400,6 @@
         try {
           recognition.start();
         } catch (e) {
-          console.error('Failed to start recognition:', e);
           micButton.classList.add('muted');
           animatedCircle.classList.remove('active');
           responseTextElement.textContent = 'Failed to start microphone.';
@@ -510,7 +410,6 @@
           recognition.stop();
           isMicOn = false;
           micButton.classList.add('muted');
-          console.log('Microphone stopped');
           animatedCircle.classList.remove('active');
           responseTextElement.textContent = 'Microphone stopped.';
           responseTextElement.classList.add('visible');
@@ -521,7 +420,6 @@
 
     function speakResponse(text) {
       if (!text.trim() || isSpeaking) {
-        console.warn('No valid text to speak or already speaking:', text);
         responseTextElement.textContent = 'No valid response to speak.';
         responseTextElement.classList.add('visible');
         isProcessing = false;
@@ -529,7 +427,6 @@
         return;
       }
 
-      console.log('Attempting to speak:', text, 'with voice:', selectedVoice);
       isSpeaking = true;
       animatedCircle.classList.add('active');
 
@@ -540,7 +437,6 @@
             rate: 1,
             pitch: 1,
             onstart: () => {
-              console.log('Speaking started:', selectedVoice.name);
               responseTextElement.textContent = 'Speaking response...';
               if (isMicOn) {
                 recognition.stop();
@@ -549,14 +445,12 @@
               }
             },
             onend: () => {
-              console.log('Speaking ended');
               isSpeaking = false;
               animatedCircle.classList.remove('active');
               isProcessing = false;
               responseTextElement.classList.remove('visible');
             },
             onerror: (e) => {
-              console.error('ResponsiveVoice error:', e);
               isSpeaking = false;
               animatedCircle.classList.remove('active');
               isProcessing = false;
@@ -565,7 +459,6 @@
             }
           });
         } else {
-          console.warn('ResponsiveVoice already playing');
           isSpeaking = false;
           isProcessing = false;
           animatedCircle.classList.remove('active');
@@ -582,7 +475,6 @@
           utterance.voice = selectedVoice.voice;
 
           utterance.onstart = () => {
-            console.log('Speaking started:', selectedVoice.name);
             responseTextElement.textContent = 'Speaking response...';
             if (isMicOn) {
               recognition.stop();
@@ -592,7 +484,6 @@
           };
 
           utterance.onend = () => {
-            console.log('Speaking ended');
             isSpeaking = false;
             animatedCircle.classList.remove('active');
             isProcessing = false;
@@ -600,30 +491,26 @@
           };
 
           utterance.onerror = (e) => {
-            console.error('Speech synthesis error:', e);
             isSpeaking = false;
             animatedCircle.classList.remove('active');
             isProcessing = false;
-            responseTextElement.textContent = 'Speech synthesis error. Trying fallback...';
+            responseTextElement.textContent = 'Audio error. Switching to English voice.';
             responseTextElement.classList.add('visible');
-            // Fallback to ResponsiveVoice
             selectedVoice = { name: 'UK English Male', lang: 'en-GB', type: 'responsivevoice' };
             setActiveVoiceButton(voiceButtons.maleEnglish);
             responsiveVoice.speak(text, selectedVoice.name, {
               volume: 1,
               rate: 1,
               pitch: 1,
-              onstart: () => console.log('Fallback speaking started'),
+              onstart: () => responseTextElement.textContent = 'Speaking response...',
               onend: () => {
-                console.log('Fallback speaking ended');
                 isSpeaking = false;
                 animatedCircle.classList.remove('active');
                 isProcessing = false;
                 responseTextElement.classList.remove('visible');
               },
-              onerror: (e) => {
-                console.error('Fallback audio error:', e);
-                responseTextElement.textContent = 'Audio playback failed. Check browser audio settings.';
+              onerror: () => {
+                responseTextElement.textContent = 'Audio playback failed.';
                 responseTextElement.classList.add('visible');
               }
             });
@@ -631,7 +518,6 @@
 
           window.speechSynthesis.speak(utterance);
         } else {
-          console.warn('SpeechSynthesis already speaking');
           isSpeaking = false;
           isProcessing = false;
           animatedCircle.classList.remove('active');
@@ -639,30 +525,26 @@
           responseTextElement.classList.add('visible');
         }
       } else {
-        console.warn('Speech synthesis not available for selected voice');
         isSpeaking = false;
         animatedCircle.classList.remove('active');
         isProcessing = false;
-        responseTextElement.textContent = 'Audio not available. Trying fallback...';
+        responseTextElement.textContent = 'Audio not available. Switching to English voice.';
         responseTextElement.classList.add('visible');
-        // Fallback to ResponsiveVoice
         selectedVoice = { name: 'UK English Male', lang: 'en-GB', type: 'responsivevoice' };
         setActiveVoiceButton(voiceButtons.maleEnglish);
         responsiveVoice.speak(text, selectedVoice.name, {
           volume: 1,
           rate: 1,
           pitch: 1,
-          onstart: () => console.log('Fallback speaking started'),
+          onstart: () => responseTextElement.textContent = 'Speaking response...',
           onend: () => {
-            console.log('Fallback speaking ended');
             isSpeaking = false;
             animatedCircle.classList.remove('active');
             isProcessing = false;
             responseTextElement.classList.remove('visible');
           },
-          onerror: (e) => {
-            console.error('Fallback audio error:', e);
-            responseTextElement.textContent = 'Audio playback failed. Check browser audio settings.';
+          onerror: () => {
+            responseTextElement.textContent = 'Audio playback failed.';
             responseTextElement.classList.add('visible');
           }
         });
@@ -682,15 +564,13 @@
 
     window.addEventListener('load', () => {
       if (typeof responsiveVoice !== 'undefined') {
-        console.log('ResponsiveVoice loaded');
         initializeVoices();
       } else {
-        console.error('ResponsiveVoice not loaded');
         voiceButtons.maleEnglish.disabled = true;
         voiceButtons.femaleEnglish.disabled = true;
         voiceButtons.maleEnglish.style.opacity = '0.5';
         voiceButtons.femaleEnglish.style.opacity = '0.5';
-        responseTextElement.textContent = 'ResponsiveVoice not loaded. English voices disabled.';
+        responseTextElement.textContent = 'English voices disabled.';
         responseTextElement.classList.add('visible');
       }
       connectWebSocket();
