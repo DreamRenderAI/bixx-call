@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.jsdelivr.net/npm/uuid@latest/dist/umd/uuidv4.min.js"></script>
   <title>Bixx AI Voice Chat</title>
   <style>
     body {
@@ -153,15 +152,14 @@
     </button>
   </div>
 
-<script>
+  <script>
+  const ws = new WebSocket(`wss://${location.host}`);
   let isMicOn = false;
   let recognition = null;
   let responseText = '';
   let isSpeaking = false;
   let selectedVoice = null;
   let voices = [];
-  let isPolling = false;
-  let lastMessageId = null; // Track last message to avoid duplicates
 
   const micButton = document.getElementById('micButton');
   const animatedCircle = document.getElementById('animatedCircle');
@@ -172,35 +170,40 @@
   const femaleHebrewButton = document.getElementById('femaleHebrew');
 
   function loadVoices() {
+    // Attempt to load voices
     voices = speechSynthesis.getVoices();
-    console.log('Initial voices:', voices);
+    console.log('Initial voices:', voices); // Debug: Log initial voices
 
+    // If no voices are loaded, wait for onvoiceschanged or force load
     if (voices.length === 0) {
       speechSynthesis.onvoiceschanged = () => {
         voices = speechSynthesis.getVoices();
-        console.log('Voices loaded via onvoiceschanged:', voices);
+        console.log('Voices loaded via onvoiceschanged:', voices); // Debug
         selectVoices();
       };
+      // Force voice loading by triggering a speechSynthesis action (mobile workaround)
       const utterance = new SpeechSynthesisUtterance('');
-      utterance.volume = 0;
+      utterance.volume = 0; // Silent to avoid audible output
       speechSynthesis.speak(utterance);
-      speechSynthesis.cancel();
+      speechSynthesis.cancel(); // Immediately cancel to avoid delays
     } else {
       selectVoices();
     }
   }
 
   function selectVoices() {
+    // Filter voices by language
     const englishVoices = voices.filter(v => v.lang.startsWith('en-'));
     const hebrewVoices = voices.filter(v => v.lang.startsWith('he-'));
 
+    // Simplified voice selection: Use first available voice or fallback
     const maleEnglish = englishVoices.find(v => 
       v.name.toLowerCase().includes('male') || 
       !v.name.toLowerCase().includes('female') || 
       v.name.toLowerCase().includes('daniel') || 
       v.name.toLowerCase().includes('david') ||
       v.name.toLowerCase().includes('matthew')
-    ) || englishVoices[0];
+    ) || englishVoices[0]; // Fallback to any English voice
 
     const femaleEnglish = englishVoices.find(v => 
       v.name.toLowerCase().includes('female') || 
@@ -208,28 +211,30 @@
       v.name.toLowerCase().includes('zira') || 
       v.name.toLowerCase().includes('susan') ||
       v.name.toLowerCase().includes('linda')
-    ) || englishVoices[1] || englishVoices[0];
+    ) || englishVoices[1] || englishVoices[0]; // Fallback to another or first English voice
 
     const maleHebrew = hebrewVoices.find(v => 
       v.name.toLowerCase().includes('male') || 
       v.name.toLowerCase().includes('asaf') || 
       v.name.toLowerCase().includes('david') ||
       !v.name.toLowerCase().includes('female')
-    ) || hebrewVoices[0];
+    ) || hebrewVoices[0]; // Fallback to any Hebrew voice
 
     const femaleHebrew = hebrewVoices.find(v => 
       v.name.toLowerCase().includes('female') || 
       v.name.toLowerCase().includes('carmit') || 
       v.name.toLowerCase().includes('michal')
-    ) || hebrewVoices[1] || hebrewVoices[0];
+    ) || hebrewVoices[1] || hebrewVoices[0]; // Fallback to another or first Hebrew voice
 
+    // Set default to Male English if available
     selectedVoice = maleEnglish || femaleEnglish || maleHebrew || femaleHebrew;
 
+    // Add event listeners for voice selection
     maleEnglishButton.addEventListener('click', () => {
       if (maleEnglish) {
         selectedVoice = maleEnglish;
         setActiveVoiceButton(maleEnglishButton);
-        console.log('Selected Male English:', selectedVoice);
+        console.log('Selected Male English:', selectedVoice); // Debug
       }
     });
 
@@ -237,7 +242,7 @@
       if (femaleEnglish) {
         selectedVoice = femaleEnglish;
         setActiveVoiceButton(femaleEnglishButton);
-        console.log('Selected Female English:', selectedVoice);
+        console.log('Selected Female English:', selectedVoice); // Debug
       }
     });
 
@@ -245,7 +250,7 @@
       if (maleHebrew) {
         selectedVoice = maleHebrew;
         setActiveVoiceButton(maleHebrewButton);
-        console.log('Selected Male Hebrew:', selectedVoice);
+        console.log('Selected Male Hebrew:', selectedVoice); // Debug
       }
     });
 
@@ -253,31 +258,33 @@
       if (femaleHebrew) {
         selectedVoice = femaleHebrew;
         setActiveVoiceButton(femaleHebrewButton);
-        console.log('Selected Female Hebrew:', selectedVoice);
+        console.log('Selected Female Hebrew:', selectedVoice); // Debug
       }
     });
 
+    // Disable buttons for unavailable voices
     if (!maleEnglish) {
       maleEnglishButton.disabled = true;
       maleEnglishButton.style.opacity = '0.5';
-      console.log('Male English voice unavailable');
+      console.log('Male English voice unavailable'); // Debug
     }
     if (!femaleEnglish) {
       femaleEnglishButton.disabled = true;
       femaleEnglishButton.style.opacity = '0.5';
-      console.log('Female English voice unavailable');
+      console.log('Female English voice unavailable'); // Debug
     }
     if (!maleHebrew) {
       maleHebrewButton.disabled = true;
       maleHebrewButton.style.opacity = '0.5';
-      console.log('Male Hebrew voice unavailable');
+      console.log('Male Hebrew voice unavailable'); // Debug
     }
     if (!femaleHebrew) {
       femaleHebrewButton.disabled = true;
       femaleHebrewButton.style.opacity = '0.5';
-      console.log('Female Hebrew voice unavailable');
+      console.log('Female Hebrew voice unavailable'); // Debug
     }
 
+    // Set initial active button
     if (selectedVoice) {
       if (selectedVoice === maleEnglish) setActiveVoiceButton(maleEnglishButton);
       else if (selectedVoice === femaleEnglish) setActiveVoiceButton(femaleEnglishButton);
@@ -285,7 +292,7 @@
       else if (selectedVoice === femaleHebrew) setActiveVoiceButton(femaleHebrewButton);
     }
 
-    console.log('Selected default voice:', selectedVoice);
+    console.log('Selected default voice:', selectedVoice); // Debug
   }
 
   function setActiveVoiceButton(button) {
@@ -293,70 +300,31 @@
     button.classList.add('active');
   }
 
-  async function sendMessage(text) {
-    try {
-      const response = await fetch('/api/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: text }),
-      });
-      if (!response.ok) {
-        console.error('Failed to send message:', response.statusText);
+  ws.onopen = () => console.log('WebSocket connected');
+  ws.onclose = () => console.log('WebSocket disconnected');
+  ws.onerror = (e) => console.error('WebSocket error', e);
+
+  ws.onmessage = (event) => {
+    const data = event.data;
+
+    if (data === '[DONE]') {
+      console.log('Stream ended');
+      animatedCircle.classList.remove('active');
+      if (responseText.trim()) {
+        speakResponse(responseText);
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
+      responseText = '';
+      return;
     }
-  }
-
-  async function pollMessages() {
-    if (!isPolling) return;
-    try {
-      const response = await fetch(`/api/poll${lastMessageId ? `?lastMessageId=${lastMessageId}` : ''}`);
-      if (!response.ok) {
-        console.error('Polling error:', response.statusText);
-        setTimeout(pollMessages, 1000);
-        return;
-      }
-      const data = await response.json();
-      const message = data.message;
-
-      if (message === '[DONE]') {
-        console.log('Stream ended');
-        animatedCircle.classList.remove('active');
-        if (responseText.trim()) {
-          speakResponse(responseText);
-        }
-        responseText = '';
-      } else if (message === '[ERROR]') {
-        animatedCircle.classList.remove('active');
-        responseText = '';
-      } else if (message) {
-        responseText += message;
-        animatedCircle.classList.add('active');
-        lastMessageId = data.messageId || lastMessageId;
-      }
-
-      setTimeout(pollMessages, 1000);
-    } catch (error) {
-      console.error('Polling error:', error);
-      setTimeout(pollMessages, 1000);
+    if (data === '[ERROR]') {
+      animatedCircle.classList.remove('active');
+      responseText = '';
+      return;
     }
-  }
 
-  function startPolling() {
-    if (!isPolling) {
-      isPolling = true;
-      console.log('Polling started');
-      pollMessages();
-    }
-  }
-
-  function stopPolling() {
-    isPolling = false;
-    console.log('Polling stopped');
-  }
+    responseText += data;
+    animatedCircle.classList.add('active');
+  };
 
   function toggleMic() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -375,26 +343,22 @@
       recognition.onstart = () => {
         micButton.classList.remove('muted');
         isMicOn = true;
-        startPolling();
       };
 
       recognition.onresult = (event) => {
         const finalTranscript = event.results[0][0].transcript;
-        sendMessage(finalTranscript);
+        ws.send(finalTranscript);
       };
 
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         micButton.classList.add('muted');
         isMicOn = false;
-        stopPolling();
       };
 
       recognition.onend = () => {
         if (isMicOn && !isSpeaking) {
           recognition.start();
-        } else {
-          stopPolling();
         }
       };
 
@@ -404,13 +368,12 @@
         recognition.stop();
         isMicOn = false;
         micButton.classList.add('muted');
-        stopPolling();
       }
     }
   }
 
   function speakResponse(text) {
-    if (!text.trim()) return;
+    if (!text.trim()) return; // Skip empty responses
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = selectedVoice ? selectedVoice.lang : 'en-US';
     utterance.volume = 1;
@@ -419,7 +382,7 @@
 
     if (selectedVoice) {
       utterance.voice = selectedVoice;
-      console.log('Speaking with voice:', selectedVoice.name);
+      console.log('Speaking with voice:', selectedVoice.name); // Debug
     } else {
       console.warn('No voice selected, using default');
       utterance.pitch = 0.8;
@@ -433,7 +396,6 @@
         recognition.stop();
         isMicOn = false;
         micButton.classList.add('muted');
-        stopPolling();
       }
     };
     utterance.onend = () => {
@@ -441,7 +403,6 @@
       animatedCircle.classList.remove('active');
       if (isMicOn) {
         recognition.start();
-        startPolling();
       }
     };
 
@@ -451,11 +412,12 @@
   micButton.addEventListener('click', toggleMic);
   closeButton.addEventListener('click', () => {
     window.speechSynthesis.cancel();
-    stopPolling();
     window.close();
   });
 
+  // Load voices on page load
   window.addEventListener('load', () => {
+    // Trigger voice loading after a user interaction (mobile workaround)
     document.addEventListener('click', loadVoices, { once: true });
   });
 </script>
