@@ -14,6 +14,7 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      touch-action: manipulation; /* Improve touch responsiveness */
     }
     .circle-container {
       width: 300px;
@@ -81,6 +82,7 @@
       font-size: 12px;
       cursor: pointer;
       transition: background 0.3s ease;
+      touch-action: manipulation;
     }
     .voice-button:hover {
       background: #666;
@@ -111,6 +113,7 @@
       align-items: center;
       justify-content: center;
       transition: background 0.3s ease;
+      touch-action: manipulation;
     }
     .mic-button:hover, .close-button:hover {
       background: #555;
@@ -181,18 +184,38 @@
     const maleHebrewButton = document.getElementById('maleHebrew');
     const femaleHebrewButton = document.getElementById('femaleHebrew');
 
-    function loadVoices() {
+    function loadVoices(attempts = 3, delay = 1000) {
+      if (attempts <= 0) {
+        console.error('Failed to load voices after retries');
+        [maleHebrewButton, femaleHebrewButton].forEach(btn => {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+        });
+        selectVoices();
+        return;
+      }
+
       // Load Hebrew voices from speechSynthesis
       if ('speechSynthesis' in window) {
         hebrewVoices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('he'));
         if (hebrewVoices.length === 0) {
           speechSynthesis.onvoiceschanged = () => {
             hebrewVoices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('he'));
-            selectVoices();
+            if (hebrewVoices.length > 0) {
+              selectVoices();
+            } else {
+              setTimeout(() => loadVoices(attempts - 1, delay), delay);
+            }
           };
+          setTimeout(() => loadVoices(attempts - 1, delay), delay);
+          return;
         }
       } else {
         console.error('speechSynthesis not supported');
+        [maleHebrewButton, femaleHebrewButton].forEach(btn => {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+        });
       }
 
       // Check if ResponsiveVoice is loaded for English voices
@@ -219,8 +242,8 @@
       };
 
       // Find Hebrew voices (male and female)
-      const maleHebrewVoice = hebrewVoices.find(v => v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('mark') || !v.name.toLowerCase().includes('female'));
-      const femaleHebrewVoice = hebrewVoices.find(v => v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('zira'));
+      const maleHebrewVoice = hebrewVoices.find(v => v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('mark') || v.name.toLowerCase().includes('asaf') || !v.name.toLowerCase().includes('female'));
+      const femaleHebrewVoice = hebrewVoices.find(v => v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('carmit'));
 
       // Assign Hebrew voices or disable buttons
       if (maleHebrewVoice) {
@@ -323,6 +346,7 @@
         };
 
         recognition.onerror = (event) => {
+          console.error('Speech recognition error:', event.error);
           micButton.classList.add('muted');
           isMicOn = false;
         };
@@ -334,7 +358,13 @@
           }
         };
 
-        recognition.start();
+        try {
+          recognition.start();
+        } catch (err) {
+          console.error('Failed to start speech recognition:', err);
+          alert('Please allow microphone access.');
+          micButton.classList.add('muted');
+        }
       } else {
         if (recognition) {
           recognition.stop();
@@ -375,8 +405,15 @@
           isSpeaking = false;
           if (isMicOn) {
             recognition.lang = selectedVoice.lang;
-            recognition.start();
+            try {
+              recognition.start();
+            } catch (err) {
+              console.error('Failed to restart recognition:', err);
+            }
           }
+        };
+        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event.error);
         };
         window.speechSynthesis.speak(utterance);
       } else {
@@ -400,7 +437,11 @@
             isSpeaking = false;
             if (isMicOn) {
               recognition.lang = selectedVoice.lang;
-              recognition.start();
+              try {
+                recognition.start();
+              } catch (err) {
+                console.error('Failed to restart recognition:', err);
+              }
             }
           }
         });
@@ -408,7 +449,23 @@
     }
 
     micButton.addEventListener('click', toggleMic);
+    micButton.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      toggleMic();
+    });
+
     closeButton.addEventListener('click', () => {
+      if (typeof responsiveVoice !== 'undefined') {
+        responsiveVoice.cancel();
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      window.close();
+    });
+
+    closeButton.addEventListener('touchstart', (e) => {
+      e.preventDefault();
       if (typeof responsiveVoice !== 'undefined') {
         responsiveVoice.cancel();
       }
@@ -420,7 +477,7 @@
 
     // Load voices after window load
     window.addEventListener('load', () => {
-      setTimeout(loadVoices, 1000); // Delay for ResponsiveVoice and speechSynthesis
+      loadVoices();
     });
   </script>
 </body>
