@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bixx AI Voice Chat</title>
   <style>
-    /* Your existing CSS remains unchanged */
     body {
       background: #1a1a1a;
       margin: 0;
@@ -22,9 +21,7 @@
       height: 300px;
       border-radius: 50%;
       background: radial-gradient(circle at top, #87ceeb, #4682b4);
-      box-shadow: inset 0 0 20px rgba(255, 255, 
-
-255, 0.2), 0 0 10px rgba(0, 0, 0, 0.5);
+      box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.2), 0 0 10px rgba(0, 0, 0, 0.5);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -152,7 +149,6 @@
   <script src="https://code.responsivevoice.org/responsivevoice.js?key=unaTPkHE"></script>
 
   <script>
-    // Prevent duplicate ResponsiveVoice initialization
     if (window.responsiveVoice && window.responsiveVoice.initialized) {
       console.warn('ResponsiveVoice already initialized');
     }
@@ -174,7 +170,6 @@
     const maleHebrewButton = document.getElementById('maleHebrew');
     const femaleHebrewButton = document.getElementById('femaleHebrew');
 
-    // Debounce function to limit rapid transcript sends
     function debounce(func, wait) {
       let timeout;
       return function (...args) {
@@ -324,18 +319,16 @@
       if (recognition) {
         recognition.stop();
         recognition = null;
-        isMicOn = false;
         micButton.classList.add('muted');
         clearTimeout(recognitionTimeout);
         animatedCircle.classList.remove('active');
       }
     }
 
-    // Debounced send transcript function
     const sendTranscript = debounce((transcript) => {
       if (ws.readyState === WebSocket.OPEN) {
         console.log('Sending transcript:', transcript);
-        ws.send(transcript); // Send plain text as per original server expectation
+        ws.send(transcript);
       } else {
         console.error('WebSocket not open');
       }
@@ -349,11 +342,16 @@
         return;
       }
 
+      if (isSpeaking) {
+        console.log('Cannot toggle mic while speaking');
+        return;
+      }
+
       if (!isMicOn) {
-        stopRecognition(); // Ensure any existing recognition is stopped
+        stopRecognition();
         recognition = new SpeechRecognition();
         recognition.lang = selectedVoice.lang;
-        recognition.interimResults = true; // Allow interim results for faster response
+        recognition.interimResults = true;
         recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
@@ -364,7 +362,7 @@
           recognitionTimeout = setTimeout(() => {
             console.log('Recognition timeout');
             stopRecognition();
-          }, 5000); // 5 seconds timeout
+          }, 5000);
         };
 
         recognition.onresult = (event) => {
@@ -375,10 +373,8 @@
           if (event.results[0].isFinal) {
             console.log('Final transcript:', transcript);
             sendTranscript(transcript);
-            recognitionTimeout = setTimeout(() => {
-              console.log('Post-result timeout');
-              stopRecognition();
-            }, 2000); // Stop after 2 seconds of silence
+            stopRecognition(); // Stop recognition after final transcript
+            // Keep isMicOn true to reactivate after response
           } else {
             console.log('Interim transcript:', transcript);
           }
@@ -387,27 +383,15 @@
         recognition.onerror = (event) => {
           console.error('Speech recognition error:', event.error);
           stopRecognition();
+          isMicOn = false; // Fully disable mic on error
         };
 
         recognition.onend = () => {
           console.log('Speech recognition ended');
           clearTimeout(recognitionTimeout);
-          if (isMicOn && !isSpeaking) {
-            setTimeout(() => {
-              if (isMicOn && !isSpeaking) {
-                console.log('Restarting recognition');
-                recognition.lang = selectedVoice.lang;
-                try {
-                  recognition.start();
-                } catch (err) {
-                  console.error('Failed to restart recognition:', err);
-                  stopRecognition();
-                }
-              }
-            }, 500); // Delay restart to avoid overlap
-          } else {
-            stopRecognition();
-          }
+          recognition = null;
+          micButton.classList.add('muted');
+          animatedCircle.classList.remove('active');
         };
 
         try {
@@ -416,21 +400,29 @@
           console.error('Failed to start speech recognition:', err);
           alert('Please allow microphone access.');
           micButton.classList.add('muted');
+          isMicOn = false;
         }
       } else {
         stopRecognition();
+        isMicOn = false;
       }
     }
 
     function speakResponse(text) {
       if (!text) {
         console.error('No text to speak');
+        if (isMicOn) {
+          toggleMic(); // Restart mic if no response to speak
+        }
         return;
       }
 
       if (selectedVoice.isHebrew) {
         if (!('speechSynthesis' in window)) {
           console.error('speechSynthesis not supported');
+          if (isMicOn) {
+            toggleMic();
+          }
           return;
         }
         const utterance = new SpeechSynthesisUtterance(text);
@@ -444,7 +436,6 @@
         utterance.onstart = () => {
           isSpeaking = true;
           animatedCircle.classList.add('active');
-          stopRecognition();
         };
         utterance.onend = () => {
           isSpeaking = false;
@@ -458,11 +449,17 @@
           console.error('Speech synthesis error:', event.error);
           isSpeaking = false;
           animatedCircle.classList.remove('active');
+          if (isMicOn) {
+            toggleMic();
+          }
         };
         window.speechSynthesis.speak(utterance);
       } else {
         if (typeof responsiveVoice === 'undefined') {
           console.error('ResponsiveVoice not loaded');
+          if (isMicOn) {
+            toggleMic();
+          }
           return;
         }
         responsiveVoice.speak(text, selectedVoice.name, {
@@ -472,7 +469,6 @@
           onstart: () => {
             isSpeaking = true;
             animatedCircle.classList.add('active');
-            stopRecognition();
           },
           onend: () => {
             isSpeaking = false;
@@ -500,6 +496,7 @@
         window.speechSynthesis.cancel();
       }
       stopRecognition();
+      isMicOn = false;
       ws.close();
       window.close();
     });
@@ -513,6 +510,7 @@
         window.speechSynthesis.cancel();
       }
       stopRecognition();
+      isMicOn = false;
       ws.close();
       window.close();
     });
