@@ -15,6 +15,7 @@
       justify-content: center;
       overflow: hidden;
       touch-action: manipulation;
+      font-family: 'Arial', sans-serif;
     }
     .circle-container {
       width: 300px;
@@ -35,21 +36,58 @@
       position: absolute;
       background: radial-gradient(circle at center, rgba(255, 255, 255, 0.1), transparent);
       border: 3px solid #87ceeb;
-      animation: pulse 1.5s ease-in-out infinite, scaleTalk 2s ease-in-out infinite;
-      opacity: 0;
+      animation: slowWave 4s ease-in-out infinite;
+      opacity: 0.6;
       transform-origin: center;
     }
     .animated-circle.active {
       opacity: 1;
     }
-    @keyframes pulse {
-      0% { transform: scale(0.5); opacity: 0.8; }
-      50% { transform: scale(1); opacity: 0.3; }
-      100% { transform: scale(1.5); opacity: 0; }
+    .animated-circle.speaking {
+      animation: bigWave 1s ease-in-out infinite;
+      border: 5px solid #00cc00;
+      opacity: 1;
     }
-    @keyframes scaleTalk {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.02); }
+    @keyframes slowWave {
+      0%, 100% {
+        transform: scale(1) translateY(0);
+        opacity: 0.6;
+      }
+      50% {
+        transform: scale(1.05) translateY(-5px);
+        opacity: 0.8;
+      }
+    }
+    @keyframes bigWave {
+      0%, 100% {
+        transform: scale(1) translateY(0);
+        border-width: 5px;
+        opacity: 1;
+      }
+      25% {
+        transform: scale(1.1) translateY(-10px);
+        border-width: 7px;
+        opacity: 0.9;
+      }
+      50% {
+        transform: scale(1.15) translateY(10px);
+        border-width: 9px;
+        opacity: 1;
+      }
+      75% {
+        transform: scale(1.1) translateY(-10px);
+        border-width: 7px;
+        opacity: 0.9;
+      }
+    }
+    .circle-text {
+      color: #fff;
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
     }
     .voice-selector {
       position: absolute;
@@ -122,6 +160,7 @@
 <body>
   <div class="circle-container">
     <div class="animated-circle" id="animatedCircle"></div>
+    <div class="circle-text">Omer AI</div>
   </div>
   <div class="voice-selector">
     <button class="voice-button active" id="maleEnglish">Male English</button>
@@ -288,7 +327,7 @@
     ws.onopen = () => console.log('WebSocket connected');
     ws.onclose = () => {
       console.log('WebSocket disconnected');
-      animatedCircle.classList.remove('active');
+      animatedCircle.classList.remove('active', 'speaking');
       stopRecognition();
     };
     ws.onerror = (e) => console.error('WebSocket error', e);
@@ -304,9 +343,9 @@
         responseText = '';
         return;
       }
-      if (data === '[ERROR]') {
-        console.error('Server error received');
-        animatedCircle.classList.remove('active');
+      if (data.startsWith('[ERROR]')) {
+        console.error('Server error received:', data);
+        animatedCircle.classList.remove('active', 'speaking');
         responseText = '';
         return;
       }
@@ -373,8 +412,7 @@
           if (event.results[0].isFinal) {
             console.log('Final transcript:', transcript);
             sendTranscript(transcript);
-            stopRecognition(); // Stop recognition after final transcript
-            // Keep isMicOn true to reactivate after response
+            stopRecognition();
           } else {
             console.log('Interim transcript:', transcript);
           }
@@ -383,7 +421,7 @@
         recognition.onerror = (event) => {
           console.error('Speech recognition error:', event.error);
           stopRecognition();
-          isMicOn = false; // Fully disable mic on error
+          isMicOn = false;
         };
 
         recognition.onend = () => {
@@ -412,7 +450,7 @@
       if (!text) {
         console.error('No text to speak');
         if (isMicOn) {
-          toggleMic(); // Restart mic if no response to speak
+          toggleMic();
         }
         return;
       }
@@ -435,11 +473,11 @@
         }
         utterance.onstart = () => {
           isSpeaking = true;
-          animatedCircle.classList.add('active');
+          animatedCircle.classList.add('speaking');
         };
         utterance.onend = () => {
           isSpeaking = false;
-          animatedCircle.classList.remove('active');
+          animatedCircle.classList.remove('speaking');
           if (isMicOn) {
             console.log('Restarting recognition after speech');
             toggleMic();
@@ -448,7 +486,7 @@
         utterance.onerror = (event) => {
           console.error('Speech synthesis error:', event.error);
           isSpeaking = false;
-          animatedCircle.classList.remove('active');
+          animatedCircle.classList.remove('speaking');
           if (isMicOn) {
             toggleMic();
           }
@@ -468,11 +506,11 @@
           pitch: 1,
           onstart: () => {
             isSpeaking = true;
-            animatedCircle.classList.add('active');
+            animatedCircle.classList.add('speaking');
           },
           onend: () => {
             isSpeaking = false;
-            animatedCircle.classList.remove('active');
+            animatedCircle.classList.remove('speaking');
             if (isMicOn) {
               console.log('Restarting recognition after speech');
               toggleMic();
