@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bixx AI Voice Chat</title>
   <style>
+    /* Your existing CSS remains unchanged */
     body {
       background: #1a1a1a;
       margin: 0;
@@ -14,7 +15,7 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      touch-action: manipulation; /* Improve touch responsiveness */
+      touch-action: manipulation;
     }
     .circle-container {
       width: 300px;
@@ -43,26 +44,13 @@
       opacity: 1;
     }
     @keyframes pulse {
-      0% {
-        transform: scale(0.5);
-        opacity: 0.8;
-      }
-      50% {
-        transform: scale(1);
-        opacity: 0.3;
-      }
-      100% {
-        transform: scale(1.5);
-        opacity: 0;
-      }
+      0% { transform: scale(0.5); opacity: 0.8; }
+      50% { transform: scale(1); opacity: 0.3; }
+      100% { transform: scale(1.5); opacity: 0; }
     }
     @keyframes scaleTalk {
-      0%, 100% {
-        transform: scale(1);
-      }
-      50% {
-        transform: scale(1.02);
-      }
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
     }
     .voice-selector {
       position: absolute;
@@ -159,7 +147,6 @@
     </button>
   </div>
 
-  <!-- Load ResponsiveVoice script for English voices -->
   <script src="https://code.responsivevoice.org/responsivevoice.js?key=unaTPkHE"></script>
 
   <script>
@@ -173,8 +160,9 @@
     let recognition = null;
     let responseText = '';
     let isSpeaking = false;
-    let selectedVoice = { name: 'US English Male', lang: 'en-US', isHebrew: false }; // Default voice
+    let selectedVoice = { name: 'US English Male', lang: 'en-US', isHebrew: false };
     let hebrewVoices = [];
+    let recognitionTimeout = null;
 
     const micButton = document.getElementById('micButton');
     const animatedCircle = document.getElementById('animatedCircle');
@@ -183,6 +171,15 @@
     const femaleEnglishButton = document.getElementById('femaleEnglish');
     const maleHebrewButton = document.getElementById('maleHebrew');
     const femaleHebrewButton = document.getElementById('femaleHebrew');
+
+    // Debounce function to limit rapid transcript sends
+    function debounce(func, wait) {
+      let timeout;
+      return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
 
     function loadVoices(attempts = 3, delay = 1000) {
       if (attempts <= 0) {
@@ -195,7 +192,6 @@
         return;
       }
 
-      // Load Hebrew voices from speechSynthesis
       if ('speechSynthesis' in window) {
         hebrewVoices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('he'));
         if (hebrewVoices.length === 0) {
@@ -218,7 +214,6 @@
         });
       }
 
-      // Check if ResponsiveVoice is loaded for English voices
       if (typeof responsiveVoice === 'undefined') {
         console.error('ResponsiveVoice not loaded');
         [maleEnglishButton, femaleEnglishButton].forEach(btn => {
@@ -233,19 +228,16 @@
     }
 
     function selectVoices() {
-      // Map buttons to voice names, languages, and whether they use speechSynthesis (Hebrew)
       const voiceMap = {
         maleEnglish: { name: 'US English Male', lang: 'en-US', isHebrew: false },
         femaleEnglish: { name: 'US English Female', lang: 'en-US', isHebrew: false },
-        maleHebrew: { name: null, lang: 'he-IL', isHebrew: true }, // Set dynamically
-        femaleHebrew: { name: null, lang: 'he-IL', isHebrew: true } // Set dynamically
+        maleHebrew: { name: null, lang: 'he-IL', isHebrew: true },
+        femaleHebrew: { name: null, lang: 'he-IL', isHebrew: true }
       };
 
-      // Find Hebrew voices (male and female)
       const maleHebrewVoice = hebrewVoices.find(v => v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('mark') || v.name.toLowerCase().includes('asaf') || !v.name.toLowerCase().includes('female'));
       const femaleHebrewVoice = hebrewVoices.find(v => v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('carmit'));
 
-      // Assign Hebrew voices or disable buttons
       if (maleHebrewVoice) {
         voiceMap.maleHebrew.name = maleHebrewVoice;
       } else {
@@ -259,7 +251,6 @@
         femaleHebrewButton.style.opacity = '0.5';
       }
 
-      // Add event listeners for voice selection buttons
       maleEnglishButton.addEventListener('click', () => {
         selectedVoice = voiceMap.maleEnglish;
         setActiveVoiceButton(maleEnglishButton);
@@ -288,7 +279,6 @@
         }
       });
 
-      // Set initial active button (default to Male English)
       setActiveVoiceButton(maleEnglishButton);
       if (recognition) recognition.lang = voiceMap.maleEnglish.lang;
     }
@@ -299,27 +289,52 @@
     }
 
     ws.onopen = () => console.log('WebSocket connected');
-    ws.onclose = () => console.log('WebSocket disconnected');
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      animatedCircle.classList.remove('active');
+      stopRecognition();
+    };
     ws.onerror = (e) => console.error('WebSocket error', e);
 
     ws.onmessage = (event) => {
-      const data = event.data;
-
-      if (data === '[DONE]') {
-        console.log('Stream ended');
-        animatedCircle.classList.remove('active');
-        speakResponse(responseText);
-        responseText = '';
-        return;
+      try {
+        const data = JSON.parse(event.data); // Assume server sends JSON
+        if (data.type === 'text') {
+          responseText += data.content;
+          animatedCircle.classList.add('active');
+        } else if (data.type === 'done') {
+          console.log('Stream ended');
+          animatedCircle.classList.remove('active');
+          speakResponse(responseText);
+          responseText = '';
+        } else if (data.type === 'error') {
+          console.error('Server error:', data.message);
+          animatedCircle.classList.remove('active');
+        }
+      } catch (e) {
+        console.error('Invalid WebSocket message:', event.data, e);
       }
-      if (data === '[ERROR]') {
-        animatedCircle.classList.remove('active');
-        return;
-      }
-
-      responseText += data;
-      animatedCircle.classList.add('active');
     };
+
+    function stopRecognition() {
+      if (recognition) {
+        recognition.stop();
+        recognition = null;
+        isMicOn = false;
+        micButton.classList.add('muted');
+        clearTimeout(recognitionTimeout);
+      }
+    }
+
+    // Debounced send transcript function
+    const sendTranscript = debounce((transcript) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        console.log('Sending transcript:', transcript);
+        ws.send(JSON.stringify({ type: 'transcript', content: transcript }));
+      } else {
+        console.error('WebSocket not open');
+      }
+    }, 500);
 
     function toggleMic() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -330,31 +345,65 @@
       }
 
       if (!isMicOn) {
+        stopRecognition(); // Ensure any existing recognition is stopped
         recognition = new SpeechRecognition();
         recognition.lang = selectedVoice.lang;
-        recognition.interimResults = false;
+        recognition.interimResults = true; // Allow interim results for faster response
         recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
+          console.log('Speech recognition started');
           micButton.classList.remove('muted');
           isMicOn = true;
+          animatedCircle.classList.add('active');
+          // Start timeout to stop recognition if no speech is detected
+          recognitionTimeout = setTimeout(() => {
+            console.log('Recognition timeout');
+            stopRecognition();
+          }, 5000); // 5 seconds timeout
         };
 
         recognition.onresult = (event) => {
-          const finalTranscript = event.results[0][0].transcript;
-          ws.send(finalTranscript);
+          clearTimeout(recognitionTimeout); // Reset timeout on new speech
+          const transcript = Array.from(event.results)
+            .map(result => result[0].transcript)
+            .join('');
+          if (event.results[0].isFinal) {
+            console.log('Final transcript:', transcript);
+            sendTranscript(transcript);
+            recognitionTimeout = setTimeout(() => {
+              console.log('Post-result timeout');
+              stopRecognition();
+            }, 2000); // Stop after 2 seconds of silence
+          } else {
+            console.log('Interim transcript:', transcript);
+            // Optionally handle interim results if needed
+          }
         };
 
         recognition.onerror = (event) => {
           console.error('Speech recognition error:', event.error);
-          micButton.classList.add('muted');
-          isMicOn = false;
+          stopRecognition();
         };
 
         recognition.onend = () => {
-          if (isMicOn) {
-            recognition.lang = selectedVoice.lang;
-            recognition.start();
+          console.log('Speech recognition ended');
+          clearTimeout(recognitionTimeout);
+          if (isMicOn && !isSpeaking) {
+            setTimeout(() => {
+              if (isMicOn && !isSpeaking) {
+                console.log('Restarting recognition');
+                recognition.lang = selectedVoice.lang;
+                try {
+                  recognition.start();
+                } catch (err) {
+                  console.error('Failed to restart recognition:', err);
+                  stopRecognition();
+                }
+              }
+            }, 500); // Delay restart to avoid overlap
+          } else {
+            stopRecognition();
           }
         };
 
@@ -366,11 +415,7 @@
           micButton.classList.add('muted');
         }
       } else {
-        if (recognition) {
-          recognition.stop();
-          isMicOn = false;
-          micButton.classList.add('muted');
-        }
+        stopRecognition();
       }
     }
 
@@ -395,25 +440,21 @@
         }
         utterance.onstart = () => {
           isSpeaking = true;
-          if (isMicOn) {
-            recognition.stop();
-            isMicOn = false;
-            micButton.classList.add('muted');
-          }
+          animatedCircle.classList.add('active');
+          stopRecognition();
         };
         utterance.onend = () => {
           isSpeaking = false;
+          animatedCircle.classList.remove('active');
           if (isMicOn) {
-            recognition.lang = selectedVoice.lang;
-            try {
-              recognition.start();
-            } catch (err) {
-              console.error('Failed to restart recognition:', err);
-            }
+            console.log('Restarting recognition after speech');
+            toggleMic();
           }
         };
         utterance.onerror = (event) => {
           console.error('Speech synthesis error:', event.error);
+          isSpeaking = false;
+          animatedCircle.classList.remove('active');
         };
         window.speechSynthesis.speak(utterance);
       } else {
@@ -427,21 +468,15 @@
           pitch: 1,
           onstart: () => {
             isSpeaking = true;
-            if (isMicOn) {
-              recognition.stop();
-              isMicOn = false;
-              micButton.classList.add('muted');
-            }
+            animatedCircle.classList.add('active');
+            stopRecognition();
           },
           onend: () => {
             isSpeaking = false;
+            animatedCircle.classList.remove('active');
             if (isMicOn) {
-              recognition.lang = selectedVoice.lang;
-              try {
-                recognition.start();
-              } catch (err) {
-                console.error('Failed to restart recognition:', err);
-              }
+              console.log('Restarting recognition after speech');
+              toggleMic();
             }
           }
         });
@@ -461,6 +496,8 @@
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
+      stopRecognition();
+      ws.close();
       window.close();
     });
 
@@ -472,10 +509,11 @@
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
+      stopRecognition();
+      ws.close();
       window.close();
     });
 
-    // Load voices after window load
     window.addEventListener('load', () => {
       loadVoices();
     });
