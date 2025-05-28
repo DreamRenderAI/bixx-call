@@ -22,7 +22,9 @@
       height: 300px;
       border-radius: 50%;
       background: radial-gradient(circle at top, #87ceeb, #4682b4);
-      box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.2), 0 0 10px rgba(0, 0, 0, 0.5);
+      box-shadow: inset 0 0 20px rgba(255, 255, 
+
+255, 0.2), 0 0 10px rgba(0, 0, 0, 0.5);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -297,23 +299,25 @@
     ws.onerror = (e) => console.error('WebSocket error', e);
 
     ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data); // Assume server sends JSON
-        if (data.type === 'text') {
-          responseText += data.content;
-          animatedCircle.classList.add('active');
-        } else if (data.type === 'done') {
-          console.log('Stream ended');
-          animatedCircle.classList.remove('active');
-          speakResponse(responseText);
-          responseText = '';
-        } else if (data.type === 'error') {
-          console.error('Server error:', data.message);
-          animatedCircle.classList.remove('active');
-        }
-      } catch (e) {
-        console.error('Invalid WebSocket message:', event.data, e);
+      const data = event.data;
+      console.log('Received WebSocket message:', data);
+
+      if (data === '[DONE]') {
+        console.log('Stream ended');
+        animatedCircle.classList.remove('active');
+        speakResponse(responseText);
+        responseText = '';
+        return;
       }
+      if (data === '[ERROR]') {
+        console.error('Server error received');
+        animatedCircle.classList.remove('active');
+        responseText = '';
+        return;
+      }
+
+      responseText += data;
+      animatedCircle.classList.add('active');
     };
 
     function stopRecognition() {
@@ -323,6 +327,7 @@
         isMicOn = false;
         micButton.classList.add('muted');
         clearTimeout(recognitionTimeout);
+        animatedCircle.classList.remove('active');
       }
     }
 
@@ -330,7 +335,7 @@
     const sendTranscript = debounce((transcript) => {
       if (ws.readyState === WebSocket.OPEN) {
         console.log('Sending transcript:', transcript);
-        ws.send(JSON.stringify({ type: 'transcript', content: transcript }));
+        ws.send(transcript); // Send plain text as per original server expectation
       } else {
         console.error('WebSocket not open');
       }
@@ -356,7 +361,6 @@
           micButton.classList.remove('muted');
           isMicOn = true;
           animatedCircle.classList.add('active');
-          // Start timeout to stop recognition if no speech is detected
           recognitionTimeout = setTimeout(() => {
             console.log('Recognition timeout');
             stopRecognition();
@@ -364,7 +368,7 @@
         };
 
         recognition.onresult = (event) => {
-          clearTimeout(recognitionTimeout); // Reset timeout on new speech
+          clearTimeout(recognitionTimeout);
           const transcript = Array.from(event.results)
             .map(result => result[0].transcript)
             .join('');
@@ -377,7 +381,6 @@
             }, 2000); // Stop after 2 seconds of silence
           } else {
             console.log('Interim transcript:', transcript);
-            // Optionally handle interim results if needed
           }
         };
 
